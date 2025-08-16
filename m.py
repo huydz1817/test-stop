@@ -6,6 +6,9 @@ import requests
 import datetime
 import os
 import signal
+import re
+import pytesseract
+from PIL import Image
 from telebot import types
 
 # insert your Telegram bot token here
@@ -239,6 +242,46 @@ def detect_target(message):
     except:
         bot.reply_to(message, "⚠️ Invalid format. Use IP:PORT")
 
+# ---------------- OCR từ ảnh ----------------
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    global last_target
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        with open("temp.jpg", "wb") as f:
+            f.write(downloaded_file)
+
+        img = Image.open("temp.jpg")
+        text = pytesseract.image_to_string(img)
+
+        matches = re.findall(r'(\\d{1,3}(?:\\.\\d{1,3}){3})[: ](\\d+)', text)
+
+        if not matches:
+            bot.reply_to(message, "❌ Không tìm thấy IP:PORT trong ảnh.")
+            return
+
+        valid = [(ip, int(port)) for ip, port in matches if 10011 <= int(port) <= 10020]
+
+        if valid:
+            ip, port = valid[0]
+            last_target = (ip, port)
+
+            markup = types.InlineKeyboardMarkup()
+            markup.add(
+                types.InlineKeyboardButton("🚀 Attack", callback_data="attack"),
+                types.InlineKeyboardButton("⛔ Stop", callback_data="stop")
+            )
+
+            bot.reply_to(message, f"🎯 Target Detected (OCR):\n{ip}:{port}", reply_markup=markup)
+        else:
+            bot.reply_to(message, "❌ Không có IP nào trong khoảng 10011-10020.")
+
+        os.remove("temp.jpg")
+    except Exception as e:
+        bot.reply_to(message, f"Lỗi OCR: {e}")
+
 @bot.callback_query_handler(func=lambda call: True)
 def inline_buttons(call):
     global last_target, bgmi_process
@@ -261,4 +304,3 @@ def inline_buttons(call):
 
 # ---------------- Run Bot ----------------
 bot.polling()
-
